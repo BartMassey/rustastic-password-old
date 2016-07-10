@@ -19,16 +19,11 @@ mod unix {
     extern crate termios;
     extern crate libc;
 
-    use self::libc::STDIN_FILENO;
-    use std::io::{ BufRead, Error, ErrorKind };
+    use std::io::{ BufReader, BufRead, Error, ErrorKind };
     use std::io::Result as IoResult;
     use std::ptr;
-	#[cfg(not(test))]
-	use std::io::{stdin, Stdin};
-	#[cfg(test)]
     use std::fs::File;
-	#[cfg(test)]
-	use std::io::{BufReader};
+    use std::os::unix::io::AsRawFd;
 
     /// A trait for operations on mutable `[u8]`s.
     trait MutableByteVector {
@@ -54,26 +49,32 @@ mod unix {
 
 
     #[cfg(test)]
-    fn get_reader<'a>() -> BufReader<File> {
+    fn get_reader() -> IoResult<File> {
         if unsafe { TEST_EOF } {
             unsafe { TEST_HAS_SEEN_EOF_BUFFER = true; }
-            BufReader::new(File::open("/dev/null").unwrap())
+            Ok(File::open("/dev/null").unwrap())
         } else {
             unsafe { TEST_HAS_SEEN_REGULAR_BUFFER = true; }
-            BufReader::new(File::open("tests/password").unwrap())
+            Ok(File::open("tests/password").unwrap())
         }
     }
 
     #[cfg(not(test))]
-    fn get_reader() -> Stdin {
-        stdin()
+    fn get_reader() -> IoResult<File> {
+        File::open("/dev/tty")
     }
 
     pub fn read_password() -> IoResult<String> {
+        let f = match get_reader() {
+            Ok(f) => f,
+            Err(e) => return Err(e)
+        };
+        let fd = f.as_raw_fd();
+
         // Make two copies of the terminal settings. The first one will be modified
         // and the second one will act as a backup for when we want to set the
         // terminal back to its original state.
-        let mut term = try!(termios::Termios::from_fd(STDIN_FILENO));
+        let mut term = try!(termios::Termios::from_fd(fd));
         let term_orig = term;
 
         // Hide the password. This is what makes this function useful.
@@ -83,15 +84,16 @@ mod unix {
         term.c_lflag |= termios::ECHONL;
 
         // Save the settings for now.
-        try!(termios::tcsetattr(STDIN_FILENO, termios::TCSANOW, &term));
+        try!(termios::tcsetattr(fd, termios::TCSANOW, &term));
 
         // Read the password.
         let mut password = String::new();
-        match get_reader().read_line(&mut password) {
+        let mut reader = BufReader::new(f);
+        match reader.read_line(&mut password) {
             Ok(_) => { },
             Err(err) => {
                 // Reset the terminal and quit.
-                try!(termios::tcsetattr(STDIN_FILENO, termios::TCSANOW, &term_orig));
+                try!(termios::tcsetattr(fd, termios::TCSANOW, &term_orig));
 
                 // Return the original IoError.
                 return Err(err);
@@ -99,7 +101,7 @@ mod unix {
         };
 
         // Reset the terminal and quit.
-        match termios::tcsetattr(STDIN_FILENO, termios::TCSANOW, &term_orig) {
+        match termios::tcsetattr(fd, termios::TCSANOW, &term_orig) {
             Ok(_) => {},
             Err(err) => {
                 unsafe { password.as_mut_vec() }.set_memory(0);
@@ -118,13 +120,14 @@ mod unix {
 
     #[test]
     fn it_works() {
-        let term_before = termios::Termios::from_fd(STDIN_FILENO).unwrap();
+        let fd = get_reader().unwrap().as_raw_fd();
+        let term_before = termios::Termios::from_fd(fd).unwrap();
         assert_eq!(read_password().unwrap(), "my-secret");
-        let term_after = termios::Termios::from_fd(STDIN_FILENO).unwrap();
+        let term_after = termios::Termios::from_fd(fd).unwrap();
         assert_eq!(term_before, term_after);
         unsafe { TEST_EOF = true; }
         assert!(!read_password().is_ok());
-        let term_after = termios::Termios::from_fd(STDIN_FILENO).unwrap();
+        let term_after = termios::Termios::from_fd(fd).unwrap();
         assert_eq!(term_before, term_after);
         assert!(unsafe { TEST_HAS_SEEN_REGULAR_BUFFER });
         assert!(unsafe { TEST_HAS_SEEN_EOF_BUFFER });
