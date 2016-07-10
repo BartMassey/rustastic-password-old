@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::io::Result as IoResult;
+
 #[cfg(not(windows))]
 mod unix {
     extern crate termios;
@@ -185,3 +187,20 @@ mod windows {
 pub use unix::read_password;
 #[cfg(windows)]
 pub use windows::read_password;
+
+use std::io::{stderr, Write};
+
+pub fn read_password_prompt<S>(prompt: S) -> IoResult<String>
+    where S: Into<String> {
+        // Print the prompt and then read the password.
+        let mut serr = stderr();
+        match serr.write(prompt.into().as_bytes()) {
+            Err(e) => return Err(e),
+            Ok(_) => ()
+        }
+        match serr.flush() {
+            Err(e) => return Err(e),
+            Ok(_) => ()
+        }
+        read_password()
+    }
