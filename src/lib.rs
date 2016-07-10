@@ -19,7 +19,7 @@ mod unix {
     extern crate termios;
     extern crate libc;
 
-    use std::io::{ BufReader, BufRead, Error, ErrorKind };
+    use std::io::{ BufReader, BufRead, Error, ErrorKind, stderr, Write };
     use std::io::Result as IoResult;
     use std::ptr;
     use std::fs::File;
@@ -64,7 +64,18 @@ mod unix {
         File::open("/dev/tty")
     }
 
-    pub fn read_password() -> IoResult<String> {
+    pub fn read_password_opt_prompt(opt_prompt: Option<String>) -> IoResult<String> {
+        // Print any prompt.
+        match opt_prompt {
+            Some(prompt) => {
+                let mut serr = stderr();
+                try!(serr.write(prompt.as_bytes()));
+                try!(serr.flush());
+            },
+            None => ()
+        };
+
+        // Set up the reader files.
         let f = try!(get_reader());
         let fd = f.as_raw_fd();
 
@@ -135,11 +146,20 @@ mod unix {
 mod windows {
     extern crate winapi;
     extern crate kernel32;
-    use std::io::{ Error, ErrorKind };
+    use std::io::{ Error, ErrorKind, stderr, Write };
     use std::io::Result as IoResult;
     use std::ptr::null_mut;
 
-    pub fn read_password() -> IoResult<String> {
+    pub fn read_password_opt_prompt(opt_prompt: Option<String>) -> IoResult<String> {
+        // Print any prompt.
+        match opt_prompt {
+            Some(prompt) => {
+                let mut serr = stderr();
+                try!(serr.write(prompt.as_bytes()));
+                try!(serr.flush());
+            },
+            None => ()
+        };
         // Get the stdin handle
         let handle = unsafe { kernel32::GetStdHandle(winapi::STD_INPUT_HANDLE) };
         if handle == winapi::INVALID_HANDLE_VALUE {
@@ -184,28 +204,13 @@ mod windows {
 }
 
 #[cfg(not(windows))]
-use unix::read_password;
+use unix::read_password_opt_prompt;
 #[cfg(windows)]
-use windows::read_password;
+use windows::read_password_opt_prompt;
 
-use std::io::{stderr, Write};
-
-fn read_password_opt_prompt(opt_prompt: Option<String>) -> IoResult<String> {
-    // Print any prompt and then read the password.
-    match opt_prompt {
-        Some(prompt) => {
-            let mut serr = stderr();
-            try!(serr.write(prompt.as_bytes()));
-            try!(serr.flush());
-        },
-        None => ()
-    }
-    read_password()
+pub fn read_password() -> IoResult<String> {
+    read_password_opt_prompt(None)
 }
-
-//pub fn read_password() -> IoResult<String> {
-//    read_password_opt_prompt(None)
-//}
 
 pub fn read_password_prompt<S>(prompt: S) -> IoResult<String>
     where S: Into<String> {
