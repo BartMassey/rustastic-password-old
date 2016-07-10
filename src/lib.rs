@@ -184,17 +184,30 @@ mod windows {
 }
 
 #[cfg(not(windows))]
-pub use unix::read_password;
+use unix::read_password;
 #[cfg(windows)]
-pub use windows::read_password;
+use windows::read_password;
 
 use std::io::{stderr, Write};
 
+fn read_password_opt_prompt(opt_prompt: Option<String>) -> IoResult<String> {
+    // Print any prompt and then read the password.
+    match opt_prompt {
+        Some(prompt) => {
+            let mut serr = stderr();
+            try!(serr.write(prompt.as_bytes()));
+            try!(serr.flush());
+        },
+        None => ()
+    }
+    read_password()
+}
+
+//pub fn read_password() -> IoResult<String> {
+//    read_password_opt_prompt(None)
+//}
+
 pub fn read_password_prompt<S>(prompt: S) -> IoResult<String>
     where S: Into<String> {
-        // Print the prompt and then read the password.
-        let mut serr = stderr();
-        try!(serr.write(prompt.into().as_bytes()));
-        try!(serr.flush());
-        read_password()
+        read_password_opt_prompt(Some(prompt.into()))
     }
