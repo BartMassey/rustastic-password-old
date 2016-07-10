@@ -65,10 +65,7 @@ mod unix {
     }
 
     pub fn read_password() -> IoResult<String> {
-        let f = match get_reader() {
-            Ok(f) => f,
-            Err(e) => return Err(e)
-        };
+        let f = try!(get_reader());
         let fd = f.as_raw_fd();
 
         // Make two copies of the terminal settings. The first one will be modified
@@ -197,13 +194,7 @@ pub fn read_password_prompt<S>(prompt: S) -> IoResult<String>
     where S: Into<String> {
         // Print the prompt and then read the password.
         let mut serr = stderr();
-        match serr.write(prompt.into().as_bytes()) {
-            Err(e) => return Err(e),
-            Ok(_) => ()
-        }
-        match serr.flush() {
-            Err(e) => return Err(e),
-            Ok(_) => ()
-        }
+        try!(serr.write(prompt.into().as_bytes()));
+        try!(serr.flush());
         read_password()
     }
