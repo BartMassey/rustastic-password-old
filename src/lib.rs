@@ -19,13 +19,11 @@ mod unix {
     extern crate termios;
     extern crate libc;
 
-    use std::io::{ BufReader, BufRead, Error, ErrorKind,
-                   stdin, stderr, Write };
+    use std::io::{ BufReader, BufRead, Error, ErrorKind, Write };
     use std::io::Result as IoResult;
     use std::ptr;
     use std::fs::{ File, OpenOptions };
-    use std::os::unix::io::AsRawFd;
-    use std::os::raw::c_int;
+    use std::os::unix::io::*;
 
     /// A trait for operations on mutable `[u8]`s.
     trait MutableByteVector {
@@ -51,51 +49,43 @@ mod unix {
 
 
     #[cfg(test)]
-    fn get_tty() -> IoResult<File> {
+    fn get_tty() -> File {
         if unsafe { TEST_EOF } {
             unsafe { TEST_HAS_SEEN_EOF_BUFFER = true; }
-            Ok(OpenOptions::new().read(true).write(true)
-               .open("/dev/null").unwrap())
+            OpenOptions::new().read(true).write(true)
+                              .open("/dev/null").unwrap()
         } else {
             unsafe { TEST_HAS_SEEN_REGULAR_BUFFER = true; }
-            Ok(OpenOptions::new().read(true).write(true)
-               .open("tests/password").unwrap())
+            OpenOptions::new().read(true).write(true)
+                              .open("tests/password").unwrap()
         }
     }
 
     #[cfg(not(test))]
-    fn get_tty() -> IoResult<File> {
-        OpenOptions::new().read(true).write(true).open("/dev/tty")
+    fn get_tty() -> File {
+        match OpenOptions::new().read(true).write(true).open("/dev/tty") {
+            Err(_) => unsafe { return FromRawFd::from_raw_fd(2) },
+            Ok(f) => return f
+        }
     }
 
     pub fn read_password_opt_prompt(opt_prompt: Option<String>) -> IoResult<String> {
-        // Get a write endpoint.
+        // Get a tty.
         let mut tty = get_tty();
-        let wtty: Write = match tty as Result<Write, Error> {
-            Ok(w) => w.by_ref(),
-            Err(_) => stderr().by_ref()
-        };
 
         // Print any prompt.
         match opt_prompt {
             Some(prompt) => {
-                try!(wtty.write(prompt.as_bytes()));
-                try!(wtty.flush());
+                try!(tty.write(prompt.as_bytes()));
+                try!(tty.flush());
             },
             None => ()
         };
 
-        // Get a read endpoint.
-        //let (rtty, fd): (Read, c_int) = match tty {
-        //    Ok(r) => (r, r.as_raw_fd()),
-        //   Err(_) => (stdin(), 0)
-        //};
-        let rtty = stdin();
-        let fd = 0;
-
         // Make two copies of the terminal settings. The first one will be modified
         // and the second one will act as a backup for when we want to set the
         // terminal back to its original state.
+        let fd = tty.as_raw_fd();
         let mut term = try!(termios::Termios::from_fd(fd));
         let term_orig = term;
 
@@ -110,7 +100,7 @@ mod unix {
 
         // Read the password.
         let mut password = String::new();
-        let mut reader = BufReader::new(rtty);
+        let mut reader = BufReader::new(tty);
         match reader.read_line(&mut password) {
             Ok(_) => { },
             Err(err) => {
