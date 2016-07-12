@@ -25,6 +25,7 @@ mod unix {
     use std::fs::{ File, OpenOptions };
     use std::os::unix::io::*;
     use self::libc::{ STDERR_FILENO, isatty };
+    use self::termios::*;
 
     /// A trait for operations on mutable `[u8]`s.
     trait MutableByteVector {
@@ -92,17 +93,17 @@ mod unix {
         // and the second one will act as a backup for when we want to set the
         // terminal back to its original state.
         let fd = tty.as_raw_fd();
-        let mut term = try!(termios::Termios::from_fd(fd));
+        let mut term = try!(Termios::from_fd(fd));
         let term_orig = term;
 
         // Hide the password. This is what makes this function useful.
-        term.c_lflag &= !termios::ECHO;
+        term.c_lflag &= !ECHO;
 
         // But don't hide the NL character when the user hits ENTER.
-        term.c_lflag |= termios::ECHONL;
+        term.c_lflag |= ECHONL;
 
         // Save the settings for now.
-        try!(termios::tcsetattr(fd, termios::TCSANOW, &term));
+        try!(tcsetattr(fd, TCSANOW, &term));
 
         // Read the password.
         let mut password = String::new();
@@ -111,7 +112,7 @@ mod unix {
             Ok(_) => { },
             Err(err) => {
                 // Reset the terminal and quit.
-                try!(termios::tcsetattr(fd, termios::TCSANOW, &term_orig));
+                try!(tcsetattr(fd, TCSANOW, &term_orig));
 
                 // Return the original IoError.
                 return Err(err);
@@ -119,7 +120,7 @@ mod unix {
         };
 
         // Reset the terminal and quit.
-        match termios::tcsetattr(fd, termios::TCSANOW, &term_orig) {
+        match tcsetattr(fd, TCSANOW, &term_orig) {
             Ok(_) => {},
             Err(err) => {
                 unsafe { password.as_mut_vec() }.set_memory(0);
@@ -139,13 +140,13 @@ mod unix {
     #[test]
     fn it_works() {
         let fd = get_tty().unwrap().as_raw_fd();
-        let term_before = termios::Termios::from_fd(fd).unwrap();
+        let term_before = Termios::from_fd(fd).unwrap();
         assert_eq!(read_password().unwrap(), "my-secret");
-        let term_after = termios::Termios::from_fd(fd).unwrap();
+        let term_after = Termios::from_fd(fd).unwrap();
         assert_eq!(term_before, term_after);
         unsafe { TEST_EOF = true; }
         assert!(!read_password().is_ok());
-        let term_after = termios::Termios::from_fd(fd).unwrap();
+        let term_after = Termios::from_fd(fd).unwrap();
         assert_eq!(term_before, term_after);
         assert!(unsafe { TEST_HAS_SEEN_REGULAR_BUFFER });
         assert!(unsafe { TEST_HAS_SEEN_EOF_BUFFER });
