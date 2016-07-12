@@ -24,6 +24,7 @@ mod unix {
     use std::ptr;
     use std::fs::{ File, OpenOptions };
     use std::os::unix::io::*;
+    use self::libc::{ STDERR_FILENO, isatty };
 
     /// A trait for operations on mutable `[u8]`s.
     trait MutableByteVector {
@@ -64,8 +65,13 @@ mod unix {
     #[cfg(not(test))]
     fn get_tty() -> File {
         match OpenOptions::new().read(true).write(true).open("/dev/tty") {
-            Err(_) => unsafe { return FromRawFd::from_raw_fd(2) },
-            Ok(f) => return f
+            Ok(f) => return f,
+            Err(_) => match unsafe { isatty(STDERR_FILENO) } {
+                0 => panic!("cannot find a tty"),
+                _ => unsafe {
+                    return FromRawFd::from_raw_fd(STDERR_FILENO)
+                }
+            }
         }
     }
 
