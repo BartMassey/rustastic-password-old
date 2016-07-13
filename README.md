@@ -18,10 +18,11 @@ Add `rpassword` as a dependency in Cargo.toml:
 
 ```toml
 [dependencies]
-rpassword = "0.2"
+rpassword = "0.3"
 ```
 
-Import the `rpassword` crate and use the `read_password()` function:
+Import the `rpassword` crate and use the `read_password()`
+or `read_password_prompt()` function:
 
 ```rust
 extern crate rpassword;
@@ -29,14 +30,14 @@ extern crate rpassword;
 use rpassword::read_password;
 
 fn main() {
-    println!("Type a password: ");
-    let password = read_password().unwrap();
+    let password = read_password_prompt("Type a password: ").unwrap();
     println!("The password is: '{}'", password);
 }
 ```
 
 ## Contributors
 
+* [@BartMassey](https://github.com/BartMassey)
 * [@conradkleinespel](https://github.com/conradkleinespel)
 * [@dcuddeback](https://github.com/dcuddeback)
 * [@equalsraf](https://github.com/equalsraf)
