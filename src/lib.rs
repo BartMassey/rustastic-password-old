@@ -51,34 +51,37 @@ mod unix {
 
 
     #[cfg(test)]
-    fn get_tty() -> File {
+    fn get_tty() -> IoResult<File> {
         if unsafe { TEST_EOF } {
             unsafe { TEST_HAS_SEEN_EOF_BUFFER = true; }
-            OpenOptions::new().read(true).write(true)
-                              .open("/dev/null").unwrap()
+            Ok(OpenOptions::new().read(true).write(true)
+                              .open("/dev/null").unwrap())
         } else {
             unsafe { TEST_HAS_SEEN_REGULAR_BUFFER = true; }
-            OpenOptions::new().read(true).write(true)
-                              .open("tests/password").unwrap()
+            Ok(OpenOptions::new().read(true).write(true)
+                              .open("tests/password").unwrap())
         }
     }
 
     #[cfg(not(test))]
-    fn get_tty() -> File {
+    fn get_tty() -> IoResult<File> {
         match OpenOptions::new().read(true).write(true).open("/dev/tty") {
-            Ok(f) => return f,
             Err(_) => match unsafe { isatty(STDERR_FILENO) } {
-                0 => panic!("cannot find a tty"),
+                0 => Err(Error::new(ErrorKind::NotFound, "no tty")),
                 _ => unsafe {
-                    return FromRawFd::from_raw_fd(STDERR_FILENO)
+                    return Ok(FromRawFd::from_raw_fd(STDERR_FILENO))
                 }
-            }
+            },
+            f => f
         }
     }
 
     pub fn read_password_opt_prompt(opt_prompt: Option<String>) -> IoResult<String> {
         // Get a tty.
-        let mut tty = get_tty();
+        let mut tty = match get_tty() {
+            Ok(f) => f,
+            Err(e) => return Err(e)
+        };
 
         // Print any prompt.
         match opt_prompt {
