@@ -1,12 +1,8 @@
 extern crate rpassword;
 
-use std::io::{stdout, Write};
-
 fn main() {
-    let mut stdout = stdout();
-
-    print!("Password: ");
-    stdout.flush().unwrap();
-    let pass = rpassword::read_password().unwrap();
-    println!("Your password is {}", pass);
+    match rpassword::read_password_prompt("Password: ") {
+        Ok(pass) => println!("Your password is {}", pass),
+        Err(e) => panic!("password read: {}", e)
+    }
 }
