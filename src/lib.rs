@@ -222,11 +222,46 @@ use unix::read_password_opt_prompt;
 #[cfg(windows)]
 use windows::read_password_opt_prompt;
 
-pub fn read_password() -> IoResult<String> {
-    read_password_opt_prompt(None)
-}
-
+/// Prompts with the given prompt, then reads a "password"
+/// from the user's terminal without echoing that password
+/// on the screen.
+///
+/// On UNIX, the prompt is written and the password read
+/// from `/dev/tty` if possible, else from `stderr` (file
+/// descriptor 2) if possible, else `read_password_prompt()`
+/// fails. On Windows, the prompt is written to `stderr` and
+/// the password is read from `stdin`.
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// extern crate rpassword;
+/// 
+/// let pw = rpassword::read_password_prompt("Password: ").unwrap();
+///    
+/// ```
 pub fn read_password_prompt<S>(prompt: S) -> IoResult<String>
     where S: Into<String> {
         read_password_opt_prompt(Some(prompt.into()))
     }
+
+/// Reads a "password" from the user's terminal without
+/// echoing that password on the screen.
+///
+/// On UNIX, the prompt the password is read
+/// from `/dev/tty` if possible, else from `stderr` (file
+/// descriptor 2) if possible, else `read_password_prompt()`
+/// fails. On Windows, the password is read from `stdin`.
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// extern crate rpassword;
+/// 
+/// let pw = rpassword::read_password().unwrap();
+///    
+/// ```
+pub fn read_password() -> IoResult<String> {
+    read_password_opt_prompt(None)
+}
+
