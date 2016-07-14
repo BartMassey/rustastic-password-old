@@ -40,30 +40,6 @@ mod unix {
         }
     }
 
-    #[cfg(test)]
-    static mut TEST_EOF: bool = false;
-
-    #[cfg(test)]
-    static mut TEST_HAS_SEEN_EOF_BUFFER: bool = false;
-
-    #[cfg(test)]
-    static mut TEST_HAS_SEEN_REGULAR_BUFFER: bool = false;
-
-
-    #[cfg(test)]
-    fn get_tty(writable: bool) -> IoResult<File> {
-        if unsafe { TEST_EOF } {
-            unsafe { TEST_HAS_SEEN_EOF_BUFFER = true; }
-            Ok(OpenOptions::new().read(true).write(writable)
-                              .open("/dev/null").unwrap())
-        } else {
-            unsafe { TEST_HAS_SEEN_REGULAR_BUFFER = true; }
-            Ok(OpenOptions::new().read(true).write(writable)
-                              .open("tests/password").unwrap())
-        }
-    }
-
-    #[cfg(not(test))]
     fn get_tty(writable: bool) -> IoResult<File> {
         match OpenOptions::new().read(true).write(writable).open("/dev/tty") {
             Err(_) => match unsafe { isatty(STDERR_FILENO) } {
@@ -142,13 +118,13 @@ mod unix {
 
     #[test]
     fn it_works() {
-        let fd = get_tty().unwrap().as_raw_fd();
+        let fd = get_tty(false).unwrap().as_raw_fd();
         let term_before = Termios::from_fd(fd).unwrap();
-        assert_eq!(read_password().unwrap(), "my-secret");
+        assert_eq!(super::read_password().unwrap(), "my-secret");
         let term_after = Termios::from_fd(fd).unwrap();
         assert_eq!(term_before, term_after);
         unsafe { TEST_EOF = true; }
-        assert!(!read_password().is_ok());
+        assert!(!super::read_password().is_ok());
         let term_after = Termios::from_fd(fd).unwrap();
         assert_eq!(term_before, term_after);
         assert!(unsafe { TEST_HAS_SEEN_REGULAR_BUFFER });
@@ -213,7 +189,7 @@ mod windows {
         match String::from_utf16(&buf[..read as usize - 2]) {
             Ok(s) => Ok(s),
             Err(_) => Err(Error::new(ErrorKind::InvalidInput, "invalid UTF-16")),
-         }
+        }
     }
 }
 
