@@ -116,19 +116,54 @@ mod unix {
         Ok(password)
     }
 
+    // Borrowed from https://github.com/stemjail/tty-rs
+    #[cfg(test)]
+    mod pty {
+        use std::path::*;
+        use std::io::{Result, Error};
+        use std::os::unix::io::AsRawFd;
+        use super::libc::*;
+        
+        const TIOCGPTN: u64 = 0x80045430;
+
+        fn ptsindex<T>(master: &mut T)
+           -> Result<u32> where T: AsRawFd {
+            let mut idx: c_uint = 0;
+            match unsafe { ioctl(master.as_raw_fd(),
+                                 TIOCGPTN,
+                                 &mut idx) } {
+                0 => Ok(idx),
+                _ => Err(Error::last_os_error()),
+            }
+        }
+
+        pub fn ptsname<T>(master: &mut T) -> Result<PathBuf> where T: AsRawFd {
+            Ok(Path::new("/dev/pts")
+                     .join(format!("{}", try!(ptsindex(master)))))
+        }
+    }
+
     #[test]
     fn it_works() {
-        let fd = get_tty(false).unwrap().as_raw_fd();
-        let term_before = Termios::from_fd(fd).unwrap();
-        assert_eq!(super::read_password().unwrap(), "my-secret");
-        let term_after = Termios::from_fd(fd).unwrap();
-        assert_eq!(term_before, term_after);
-        unsafe { TEST_EOF = true; }
-        assert!(!super::read_password().is_ok());
-        let term_after = Termios::from_fd(fd).unwrap();
-        assert_eq!(term_before, term_after);
-        assert!(unsafe { TEST_HAS_SEEN_REGULAR_BUFFER });
-        assert!(unsafe { TEST_HAS_SEEN_EOF_BUFFER });
+        let mut master = OpenOptions::new()
+                     .read(true).write(true)
+                     .open("/dev/ptmx").unwrap();
+        let slave_name = pty::ptsname(&mut master).unwrap();
+        println!("{}", slave_name.into_os_string());
+        let slave = OpenOptions::new()
+                    .read(true).write(true)
+                    .open(slave_name).unwrap();
+        match unsafe{ libc::fork() } {
+            -1 => {
+                panic!("fork failed: {}", Error::last_os_error());
+            },
+            0 => {
+                drop(master)
+            },
+            _ => {
+                drop(slave)
+            }
+        }
     }
 }
 
