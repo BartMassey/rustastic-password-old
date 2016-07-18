@@ -27,19 +27,6 @@ mod unix {
     use self::libc::{ STDERR_FILENO, isatty };
     use self::termios::*;
 
-    /// A trait for operations on mutable `[u8]`s.
-    trait MutableByteVector {
-        /// Sets all bytes of the receiver to the given value.
-        fn set_memory(&mut self, value: u8);
-    }
-
-    impl MutableByteVector for Vec<u8> {
-        #[inline]
-        fn set_memory(&mut self, value: u8) {
-            unsafe { ptr::write_bytes(self.as_mut_ptr(), value, self.len()) };
-        }
-    }
-
     fn get_tty(writable: bool) -> IoResult<File> {
         match OpenOptions::new().read(true).write(writable).open("/dev/tty") {
             Err(_) => match unsafe { isatty(STDERR_FILENO) } {
@@ -102,7 +89,10 @@ mod unix {
         match tcsetattr(fd, TCSANOW, &term_orig) {
             Ok(_) => {},
             Err(err) => {
-                unsafe { password.as_mut_vec() }.set_memory(0);
+                unsafe {
+                    let pw = password.as_mut_vec();
+                    ptr::write_bytes(pw.as_mut_ptr(), 0, pw.len());
+                }
                 return Err(err);
             }
         }
