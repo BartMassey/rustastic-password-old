@@ -18,6 +18,8 @@ use std::io::Result as IoResult;
 mod unix {
     extern crate termios;
     extern crate libc;
+    #[cfg(test)]
+    extern crate ptyknot;
 
     use std::io::{ BufReader, BufRead, Error, ErrorKind, Write };
     use std::io::Result as IoResult;
@@ -26,6 +28,9 @@ mod unix {
     use std::os::unix::io::*;
     use self::libc::{ STDERR_FILENO, isatty };
     use self::termios::*;
+
+    #[cfg(test)]
+    use std::io::Read;
 
     fn get_tty(writable: bool) -> IoResult<File> {
         match OpenOptions::new().read(true).write(writable).open("/dev/tty") {
@@ -106,8 +111,31 @@ mod unix {
         Ok(password)
     }
 
+    #[cfg(test)]
+    const PROMPT: &'static str = "pw:";
+
+    #[cfg(test)]
+    const PASSWORD: &'static str = "secret";
+
+    #[cfg(test)]
+    fn slave() {
+        let pw = super::read_password_prompt(PROMPT)
+                 .expect("slave couldn't read password");
+        assert!(pw == PASSWORD);
+    }
+
     #[test]
     fn it_works() {
+        let (mut master, pid) = ptyknot::ptyknot(slave).expect("ptyknot fail");
+        let mut prompt = PROMPT.as_bytes().to_vec();
+        master.read_exact(&mut prompt)
+              .expect("could not read prompt");
+        assert!(prompt == PROMPT.as_bytes().to_vec());
+        let mut password = PASSWORD.as_bytes().to_vec();
+        password.push('\n' as u8);
+        master.write(&password).expect("could not write password");
+        let status = ptyknot::waitpid(pid).expect("could not reap child");
+        assert_eq!(status, 0);
     }
 }
 

@@ -13,6 +13,10 @@ keywords = ["read", "password", "security", "pass", "getpass"]
 [target.'cfg(not(windows))'.dependencies]
 libc = "0.2"
 termios = "0.2"
+
+[target.'cfg(not(windows))'.dev-dependencies]
+ptyknot = { path = "/local/src/ptyknot" }
+
 [target.'cfg(windows)'.dependencies]
 winapi = "0.2"
 kernel32-sys = "0.2"
