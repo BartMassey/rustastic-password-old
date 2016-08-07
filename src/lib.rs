@@ -127,13 +127,16 @@ mod unix {
     #[test]
     fn it_works() {
         let (mut master, pid) = ptyknot::ptyknot(slave).expect("ptyknot fail");
+
         let mut prompt = PROMPT.as_bytes().to_vec();
         master.read_exact(&mut prompt)
               .expect("could not read prompt");
         assert!(prompt == PROMPT.as_bytes().to_vec());
+
         let mut password = PASSWORD.as_bytes().to_vec();
         password.push('\n' as u8);
         master.write(&password).expect("could not write password");
+        
         let status = ptyknot::waitpid(pid).expect("could not reap child");
         assert_eq!(status, 0);
     }
